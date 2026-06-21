@@ -1,0 +1,30 @@
+# Keep image build contexts small and reproducible.
+# NOTE: services build from their own sub-contexts (./api, ./worker); Phase 4
+# may add per-service .dockerignore files. This root file documents the intent
+# and applies to any build run from the repo root.
+
+# ── Python caches / build artifacts ──
+**/__pycache__/
+**/*.py[cod]
+**/*.egg-info/
+**/build/
+**/dist/
+
+# ── Virtual environments ──
+**/.venv/
+**/venv/
+**/env/
+
+# ── VCS / env / docs / tests (not needed at runtime) ──
+.git/
+.gitignore
+.env
+docs/
+tests/
+README.md
+Makefile
+
+# ── Tooling caches / OS cruft ──
+**/.pytest_cache/
+.coverage
+.DS_Store

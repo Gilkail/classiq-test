@@ -1,0 +1,4 @@
+# Integration-test dependencies.
+# Unpinned for Phase 0 scaffolding; exact versions are pinned in Phase 4.
+pytest
+httpx

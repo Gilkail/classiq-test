@@ -1,0 +1,9 @@
+# API service dependencies.
+# Unpinned for Phase 0 scaffolding; exact versions are pinned in Phase 4 once
+# images are first built and compatibility is confirmed.
+fastapi
+uvicorn[standard]
+redis
+rq
+pydantic
+pydantic-settings
