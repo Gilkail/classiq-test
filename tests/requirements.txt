@@ -1,4 +1,4 @@
-# Integration-test dependencies.
-# Unpinned for Phase 0 scaffolding; exact versions are pinned in Phase 4.
-pytest
-httpx
+# Integration-test dependencies — exact pins (Phase 4).
+# Resolved from PyPI on 2026-06-21.
+pytest==9.0.3
+httpx==0.28.1

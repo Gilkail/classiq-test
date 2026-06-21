@@ -1,0 +1,58 @@
+# Quantum Circuit Execution Engine — full stack (REFERENCE §9).
+# Single-command run:  docker compose up --build
+# Scale workers:       docker compose up --build --scale worker=3
+name: classiq-test
+
+services:
+  # ── Broker + state store ──────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    # Enable AOF persistence so queued/state data survives a restart.
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # ── FastAPI ingress (published on host :8000) ─────────────────────────────
+  api:
+    build: ./api
+    ports:
+      - "8000:8000"
+    # Defaults baked into config.py already match REFERENCE §10, so .env is
+    # optional — copy .env.example to .env only to override.
+    env_file:
+      - path: .env
+        required: false
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # ── RQ worker running the Qiskit execution service ────────────────────────
+  worker:
+    build: ./worker
+    env_file:
+      - path: .env
+        required: false
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  redis-data:

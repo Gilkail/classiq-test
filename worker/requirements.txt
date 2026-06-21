@@ -1,9 +1,15 @@
-# Worker service dependencies (heavy Qiskit/Aer stack lives only here).
-# Unpinned for Phase 0 scaffolding; exact versions are pinned in Phase 4 once
-# images are first built and compatibility is confirmed
-# (Qiskit >= 1.1 / qiskit-aer 0.17.x / qiskit-qasm3-import >= 0.6).
-rq
-redis
-qiskit
-qiskit-aer
-qiskit-qasm3-import
+# Worker service dependencies — exact pins (Phase 4).
+# The heavy Qiskit/Aer stack lives only here (kept out of the API image).
+#
+# Compatibility (verified against each package's declared metadata):
+#   - qiskit-aer 0.17.2        requires qiskit>=1.1.0          (satisfied by 2.4.1)
+#   - qiskit-qasm3-import 0.6.0 requires qiskit>=0.37.0 and
+#                               openqasm3[parser]>=0.4,<2.0    (satisfied by 2.4.1)
+#   - qiskit.qasm3.loads() delegates to qiskit_qasm3_import.parse when the
+#     importer is installed, so execution.py's QASM3ImporterError catch is valid.
+# Confirm the resolved tree on the first `docker compose up --build`.
+rq==2.10.0
+redis==8.0.0
+qiskit==2.4.1
+qiskit-aer==0.17.2
+qiskit-qasm3-import==0.6.0

@@ -1,0 +1,9 @@
+# Build context is ./api; keep it minimal and reproducible.
+**/__pycache__/
+**/*.py[cod]
+**/*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+.env
+*.md

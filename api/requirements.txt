@@ -1,9 +1,10 @@
-# API service dependencies.
-# Unpinned for Phase 0 scaffolding; exact versions are pinned in Phase 4 once
-# images are first built and compatibility is confirmed.
-fastapi
-uvicorn[standard]
-redis
-rq
-pydantic
-pydantic-settings
+# API service dependencies — exact pins (Phase 4).
+# The API image deliberately excludes the heavy Qiskit/Aer stack.
+# Versions resolved from PyPI/package metadata on 2026-06-21; the first
+# `docker compose up --build` is the Phase 4 acceptance gate that confirms them.
+fastapi==0.136.3
+uvicorn[standard]==0.49.0
+redis==8.0.0
+rq==2.10.0
+pydantic==2.13.4
+pydantic-settings==2.14.1
