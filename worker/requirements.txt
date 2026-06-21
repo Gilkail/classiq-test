@@ -10,6 +10,8 @@
 # Confirm the resolved tree on the first `docker compose up --build`.
 rq==2.10.0
 redis==8.0.0
+pydantic==2.13.4
+pydantic-settings==2.14.1
 qiskit==2.4.1
 qiskit-aer==0.17.2
 qiskit-qasm3-import==0.6.0

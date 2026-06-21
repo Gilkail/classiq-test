@@ -14,8 +14,9 @@ from __future__ import annotations
 
 import qiskit.qasm3
 from qiskit import transpile
+from qiskit.qasm3 import QASM3ImporterError
 from qiskit_aer import AerSimulator
-from qiskit_qasm3_import import QASM3ImporterError
+from openqasm3.parser import QASM3ParsingError
 
 
 class InvalidQasmError(Exception):
@@ -31,7 +32,10 @@ def run_circuit(qasm: str, shots: int) -> dict[str, int]:
     # Parse first so syntax errors are distinguished from execution faults (F2).
     try:
         circuit = qiskit.qasm3.loads(qasm)
-    except QASM3ImporterError as exc:
+    except (QASM3ImporterError, QASM3ParsingError) as exc:
+        # QASM3ImporterError: valid syntax, un-convertible to a circuit.
+        # QASM3ParsingError: malformed syntax (raised by the ANTLR parser and
+        # NOT wrapped by loads()). Both are bad input -> F2.
         raise InvalidQasmError("Invalid QASM3 syntax") from exc
 
     # Transpile + run; any fault here is an execution error (F3).
