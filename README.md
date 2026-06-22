@@ -1,39 +1,27 @@
 # Quantum Circuit Execution Engine
 
-A service that accepts a serialized **OpenQASM 3** circuit, executes it
-**asynchronously** on a Qiskit simulator, and lets a client poll for the result
-by task ID. You submit a circuit and immediately get a `task_id` back;
-execution happens in the background; you poll until the result is ready.
-Submission never blocks on execution, accepted tasks are never lost, and the
-whole stack comes up with a single command.
-
----
+Submit an OpenQASM 3 circuit, get back a task ID, and poll until the result is ready. Execution runs in the background on a Qiskit simulator.
 
 ## Quick start
 
-**You need:** Docker and Docker Compose v2. Nothing else — Python, Redis, and
-Qiskit all run inside the containers. No local Python setup, no manual
-dependency install.
+You need Docker and Docker Compose v2. Python, Redis, and Qiskit all run inside the containers.
 
-**1. Start the stack** from the project root:
+**1. Start the stack**
 
 ```bash
 docker compose up --build
 ```
 
-This builds three containers (API, worker, Redis) and starts them. The API and
-worker wait for Redis to report healthy before they start, so you never hit a
-half-initialized stack. When it's up, the API is available at
-`http://localhost:8000`.
+The API listens on `http://localhost:8000`.
 
-**2. Check it's alive:**
+**2. Health check**
 
 ```bash
 curl localhost:8000/health
-# → {"status": "ok"}
+# {"status": "ok"}
 ```
 
-**3. Submit a circuit** (a 2-qubit Bell state) and capture the returned ID:
+**3. Submit a circuit** (2-qubit Bell state)
 
 ```bash
 TASK_ID=$(curl -s -X POST localhost:8000/tasks \
@@ -43,210 +31,149 @@ TASK_ID=$(curl -s -X POST localhost:8000/tasks \
 echo "$TASK_ID"
 ```
 
-**4. Poll for the result** using that ID:
+**4. Poll for the result**
 
 ```bash
 curl -s localhost:8000/tasks/$TASK_ID
-# → {"status": "pending", "message": "Task is still in progress."}
-# … a moment later …
-# → {"status": "completed", "result": {"00": 512, "11": 512}}
+# {"status": "pending", "message": "Task is still in progress."}
+# then
+# {"status": "completed", "result": {"00": 512, "11": 512}}
 ```
 
-A Bell state produces counts concentrated on `00` and `11`, summing to the shot
-count (1024 by default). That's the full loop: submit → poll → result.
+A Bell state should show counts on `00` and `11` that add up to 1024 shots (the default).
 
-Prefer a browser? Interactive API docs are served at
-[`/docs`](http://localhost:8000/docs) (Swagger) and `/redoc`. To stop the stack,
-press `Ctrl+C`, or run `docker compose down`.
+API docs: [`/docs`](http://localhost:8000/docs) (Swagger) and `/redoc`.
 
-### Run more workers
+Stop the stack with `Ctrl+C` or `docker compose down`.
 
-To process circuits in parallel, scale the worker against the same queue — no
-code change required:
+### Scale workers
 
 ```bash
 docker compose up --build --scale worker=3
 ```
 
-### Configuration (optional)
+### Configuration
 
-Defaults are baked into the images, so the stack runs correctly with **no `.env`
-file**. To override a default, copy the template and edit it:
+Defaults are built into the images. To override them, copy `.env.example` to `.env` and edit values there.
 
-```bash
-cp .env.example .env
-```
-
-| Variable        | Default                    | Used by        | Meaning                                  |
-|-----------------|----------------------------|----------------|------------------------------------------|
-| `REDIS_URL`     | `redis://redis:6379/0`     | api, worker    | Redis connection string                  |
-| `RQ_QUEUE_NAME` | `default`                  | api, worker    | RQ queue name                            |
-| `NUM_SHOTS`     | `1024`                     | worker         | Simulator shot count                     |
-| `JOB_TIMEOUT`   | `180` (s)                  | api, worker    | Hard per-job ceiling                     |
-| `RESULT_TTL`    | `86400` (s)                | api, worker    | TTL on `task:{id}` and RQ result metadata |
-| `MAX_RETRIES`   | `2`                        | api            | RQ `Retry` attempts for transient faults |
-| `LOG_LEVEL`     | `INFO`                     | all            | Logging verbosity                        |
+| Variable        | Default                | Meaning                    |
+|-----------------|------------------------|----------------------------|
+| `REDIS_URL`     | `redis://redis:6379/0` | Redis connection           |
+| `RQ_QUEUE_NAME` | `default`              | RQ queue name              |
+| `NUM_SHOTS`     | `1024`                 | Simulator shots            |
+| `JOB_TIMEOUT`   | `180`                  | Max job runtime (seconds)  |
+| `RESULT_TTL`    | `86400`                | Task result TTL (seconds)  |
+| `MAX_RETRIES`   | `2`                    | RQ retry count             |
+| `LOG_LEVEL`     | `INFO`                 | Log level                  |
 
 ### Make targets
 
-A `Makefile` wraps the common commands if you prefer them:
+| Target      | What it does                          |
+|-------------|---------------------------------------|
+| `make up`   | Start the stack                       |
+| `make down` | Stop the stack                        |
+| `make test` | Start the stack and run pytest        |
+| `make logs` | Follow logs from all services         |
 
-| Target       | Action                                          |
-|--------------|-------------------------------------------------|
-| `make up`    | `docker compose up --build` (whole stack)       |
-| `make down`  | `docker compose down` (stop; add `-v` to wipe Redis data) |
-| `make test`  | start the stack detached, then run `pytest`     |
-| `make logs`  | tail logs from all services                     |
+## API
 
----
+### `GET /health`
 
-## API contract
-
-Liveness probe: `GET /health` → `{"status": "ok"}` (returns `503` if Redis is
-unreachable).
+Returns `{"status": "ok"}`. Returns `503` if Redis is down.
 
 ### `POST /tasks`
 
-Submit a circuit for asynchronous execution.
+Submit a circuit.
 
-**Request** — `Content-Type: application/json`
+Request body:
 
 ```json
-{ "qc": "<serialized OpenQASM 3 string>" }
+{ "qc": "<OpenQASM 3 string>" }
 ```
 
-The body must be a JSON object with exactly the key `qc`, a non-empty string.
-Unknown/extra fields are rejected.
+| Status | When |
+|--------|------|
+| `202`  | Task accepted and queued |
+| `400`  | Invalid request (missing `qc`, bad JSON, extra fields) |
+| `503`  | Redis or queue unavailable |
 
-| Code              | When                                                       | Body                                                                       |
-|-------------------|------------------------------------------------------------|----------------------------------------------------------------------------|
-| `202 Accepted`    | Valid payload, task queued                                 | `{"task_id": "<uuid>", "message": "Task submitted successfully."}`         |
-| `400 Bad Request` | Missing `qc`, wrong type, empty string, extra key, bad JSON | `{"status": "error", "message": "<validation detail>"}`                    |
-| `503`             | Redis/enqueue unreachable                                  | `{"status": "error", "message": "Task queue unavailable, retry later."}`  |
+Response on success:
 
-Submission returns `202 Accepted` rather than `200` because the request is
-*accepted for asynchronous processing*, not completed inline. Validation happens
-at the API edge, so bad input never reaches the worker or consumes a queue slot.
+```json
+{"task_id": "<uuid>", "message": "Task submitted successfully."}
+```
 
 ### `GET /tasks/{id}`
 
-Retrieve the status/result of a task.
+| Status | When |
+|--------|------|
+| `200`  | Task completed, pending, or failed (see `status` field) |
+| `404`  | Unknown task ID |
 
-| Code            | Condition       | Body                                                              |
-|-----------------|-----------------|------------------------------------------------------------------|
-| `200 OK`        | Completed       | `{"status": "completed", "result": {"00": 512, "11": 512}}`      |
-| `200 OK`        | Still processing | `{"status": "pending", "message": "Task is still in progress."}` |
-| `200 OK`        | Failed          | `{"status": "error", "message": "<reason>"}`                     |
-| `404 Not Found` | Unknown ID      | `{"status": "error", "message": "Task not found."}`              |
+Completed example:
 
----
+```json
+{"status": "completed", "result": {"00": 512, "11": 512}}
+```
+
+Pending example:
+
+```json
+{"status": "pending", "message": "Task is still in progress."}
+```
+
+Error example:
+
+```json
+{"status": "error", "message": "<reason>"}
+```
 
 ## Architecture
 
-Three independently containerized services share one Redis instance. The **API**
-validates and enqueues; **Redis** is both the RQ broker and the task-state
-store; the **worker** runs the circuit and writes the terminal result. The API
-and worker are separate processes (not threads) so the heavy Qiskit/Aer stack
-lives only in the worker image and a CPU-bound simulation can never starve the
-API event loop.
+Three services share one Redis instance:
+
+- **api** (FastAPI): validates requests, creates tasks, enqueues jobs
+- **redis**: message queue and task state store
+- **worker** (RQ + Qiskit): runs circuits on AerSimulator
 
 ```
-                   ┌──────────────────────────────────────────┐
-                   │                Client                     │
-                   │   (curl / pytest+httpx / any HTTP caller) │
-                   └───────────────┬───────────────┬──────────┘
-                POST /tasks (202)  │               │  GET /tasks/{id} (200/404)
-                                   ▼               ▼
-                   ┌──────────────────────────────────────────┐
-                   │            api  (FastAPI + Uvicorn)       │
-                   │  • validates {"qc": "<str>"} (Pydantic)   │
-                   │  • mints task_id (UUID4)                  │
-                   │  • writes task:{id} = pending             │
-                   │  • enqueues RQ job (job_id = task_id)     │
-                   │  • reads task:{id} on GET                 │
-                   └───────────────┬──────────────────────────┘
-                                   │ enqueue / read-write
-                                   ▼
-                   ┌──────────────────────────────────────────┐
-                   │                 redis                     │
-                   │  • RQ queue + job registries (transport)  │
-                   │  • task:{id} HASH  (canonical state)      │
-                   │  • AOF persistence (durability)           │
-                   └───────────────┬──────────────────────────┘
-                                   │ pop job / write result
-                                   ▼
-                   ┌──────────────────────────────────────────┐
-                   │           worker  (RQ worker)             │
-                   │  • qiskit.qasm3.loads(qc)                 │
-                   │  • transpile + AerSimulator.run(shots)    │
-                   │  • writes task:{id} = completed | error   │
-                   └──────────────────────────────────────────┘
+Client
+  |  POST /tasks
+  v
+api  -->  redis  -->  worker
+  ^                          |
+  |  GET /tasks/{id}         |
+  +--------------------------+
+         (writes result to redis)
 ```
 
-**Data flow.** On `POST /tasks` the API mints `task_id = uuid4()`, writes
-`task:{id}` as `pending` **before** enqueuing (so an immediate `GET` always sees
-`pending`), then enqueues an RQ job with `job_id == task_id`. The worker pops the
-job, deserializes the QASM with `qiskit.qasm3.loads`, transpiles and runs it on
-`AerSimulator`, and writes `task:{id} = completed` (with a counts dict) or
-`error`. `GET /tasks/{id}` reads only the `task:{id}` hash and maps it to JSON —
-it has zero coupling to RQ internals.
+On submit, the API writes a `pending` task record, then enqueues an RQ job with the same ID. The worker runs the circuit and updates the task to `completed` or `error`. Poll endpoints read task state from Redis only.
 
-| Service  | Image            | Responsibility                                   |
-|----------|------------------|--------------------------------------------------|
-| `redis`  | `redis:7-alpine` | RQ broker + `task:{id}` state store, AOF on      |
-| `api`    | `./api`          | FastAPI/Uvicorn HTTP surface, published on `:8000` |
-| `worker` | `./worker`       | RQ worker running the Qiskit execution service   |
+## Failure handling
 
----
+- Bad JSON or missing `qc` returns `400` before anything is queued.
+- Invalid QASM returns `200` with `status: error`.
+- Simulation errors return `200` with `status: error`.
+- If Redis is down at submit time, the API returns `503`.
+- Redis uses AOF persistence so queued jobs survive a restart.
+- Jobs have a timeout and limited retries so tasks do not stay `pending` forever.
 
-## Resiliency & failure modes
+## Tests
 
-The headline guarantee is **at-least-once execution ending in a terminal
-state**: every task the API accepts (`202`) becomes either `completed` or
-`error` in finite time — none vanish silently or hang in `pending` forever.
-
-- **Durability at submission.** RQ's `enqueue` persists the job inside Redis
-  before `POST` returns `202`. Redis runs with **AOF persistence**
-  (`--appendonly yes`) backed by a named Docker volume, so queued jobs and task
-  state survive a Redis restart.
-- **Crash recovery in flight.** Each job runs in a forked work-horse registered
-  in RQ's `StartedJobRegistry`. If a worker is killed mid-job, RQ's maintenance
-  pass routes the abandoned job to the `FailedJobRegistry`; `job_timeout` bounds
-  how long a wedged simulation can run; `Retry(max=MAX_RETRIES)` retries
-  transient faults.
-- **Terminal-state guarantee in the worker.** The job function wraps *all*
-  execution in `try/except` and writes a terminal `error` state for every caught
-  failure (it deliberately does **not** re-raise), so a polling client always
-  converges to an answer.
-
-| Failure                                            | Handling                                                                                   | Client sees                                                     |
-|----------------------------------------------------|--------------------------------------------------------------------------------------------|----------------------------------------------------------------|
-| Malformed body (missing/empty `qc`, extra key, bad JSON) | Pydantic rejects at the API edge before enqueue                                       | `400` + validation detail                                      |
-| Invalid QASM3 syntax                               | `QASM3ImporterError` → terminal `error`, `error_kind=invalid_qasm3` (logged `WARNING`)     | `200` `{status: error, message: "Invalid QASM3 syntax"}`       |
-| Simulation fault (too deep, OOM, Aer crash)        | Broad `except` → terminal `error`, `error_kind=execution_error` (logged `ERROR` + traceback) | `200` `{status: error, message: <reason>}`                   |
-| Worker killed mid-job                              | RQ abandoned-job cleanup + `job_timeout`                                                    | converges to `error` (never stuck `pending`)                   |
-| Unknown task ID on `GET`                          | `task:{id}` hash absent                                                                     | `404` `{status: error, message: "Task not found."}`            |
-| Redis unavailable at submission                   | Roll back the pending hash, fail fast                                                       | `503` retryable error                                          |
-| Startup race (api/worker boot before Redis ready) | Compose health gating: `depends_on: condition: service_healthy`                            | clients never hit a half-initialized stack                     |
-
-Logs are structured JSON to stdout; every line in the request/execution path
-carries the `task_id` so a single task can be traced end-to-end across the API
-and worker containers.
-
----
-
-## Running the tests
-
-The tests in `tests/` drive the real HTTP surface, so the stack must be up
-first. Start it, install the test deps, and run pytest against the exposed port:
+The integration tests hit the real HTTP API. Start the stack first:
 
 ```bash
-docker compose up --build -d           # start the stack in the background
-pip install -r tests/requirements.txt  # pytest + httpx (in a venv if you prefer)
-pytest                                  # green when submit → process → retrieve works
+docker compose up --build -d
+pip install -r tests/requirements.txt
+pytest
 ```
 
-`BASE_URL` defaults to `http://localhost:8000` and can be overridden via the
-environment. The suite covers submission validation (`test_submit.py`), the full
-submit → poll → `completed` lifecycle (`test_lifecycle.py`), and the failure
-paths — invalid QASM3 and unknown ID (`test_failures.py`).
+Or run `make test`, which starts the stack and runs pytest for you.
+
+Set `BASE_URL` to point at a different host (default is `http://localhost:8000`).
+
+Test files:
+
+- `tests/test_submit.py` - request validation
+- `tests/test_lifecycle.py` - submit, poll, completed
+- `tests/test_failures.py` - invalid QASM and unknown task ID
