@@ -1,4 +1,4 @@
 # Integration-test dependencies — exact pins (Phase 4).
 # Resolved from PyPI on 2026-06-21.
-pytest==9.0.3
+pytest==8.4.2
 httpx==0.28.1

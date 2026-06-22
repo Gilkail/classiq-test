@@ -12,10 +12,24 @@ up:
 down:
 	docker compose down $(ARGS)
 
+# Host-side virtualenv for the integration tests (pytest + httpx).
+# Kept local to the repo and out of git (see .gitignore).
+VENV   := .venv
+PIP    := $(VENV)/bin/pip
+PYTEST := $(VENV)/bin/pytest
+
+# Create the venv and install the pinned test deps on first use, and again
+# whenever tests/requirements.txt changes. Run via absolute path so a bare
+# `pytest` on (or missing from) your PATH never matters.
+$(PYTEST): tests/requirements.txt
+	python3 -m venv $(VENV)
+	$(PIP) install --upgrade pip
+	$(PIP) install -r tests/requirements.txt
+
 # Bring the stack up detached, then run the integration tests against :8000.
-test:
-	docker compose up --build -d
-	pytest
+test: $(PYTEST)
+	docker compose up --build -d --wait
+	$(PYTEST)
 
 # Tail logs from all services (Ctrl-C to stop).
 logs:
