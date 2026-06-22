@@ -18,17 +18,16 @@ Build a production-grade service that accepts a serialized quantum circuit
 (OpenQASM 3), executes it asynchronously on a simulator, and lets a client poll
 for the result by task ID.
 
-The assignment is explicitly graded on four properties, so the architecture is
-organized around them:
+The architecture is organized around four core properties:
 
-| Graded property | Where it is addressed |
+| Core property | Where it is addressed |
 |---|---|
 | **Asynchronous processing** | API never blocks on execution; a separate worker process runs the circuit (§4, §5). |
 | **Task integrity ("no tasks lost")** | Durable Redis-backed queue + AOF persistence + RQ crash-recovery registries + terminal-state guarantee (§7). |
 | **Containerization & orchestration** | Three services in `docker-compose.yml` with health-gated startup ordering (§9). |
 | **Robustness** | Strict input validation, exhaustive worker `try/except`, structured logging, no task can hang in `pending` forever (§8). |
 
-### Non-goals (explicitly out of scope for 48h)
+### Non-goals (out of scope)
 
 Authentication/authorization, multi-tenant quotas, horizontal autoscaling, a
 durable SQL store, real-quantum-hardware backends, and a result-streaming
@@ -41,11 +40,11 @@ see §11.
 
 | Layer | Choice | Why |
 |---|---|---|
-| Language / base image | **Python 3.10** (`python:3.10-slim`) | Satisfies the "3.9+" requirement with a small footprint; 3.10 has mature typing + structural pattern matching. |
+| Language / base image | **Python 3.10** (`python:3.10-slim`) | Meets the 3.9+ baseline with a small footprint; 3.10 has mature typing + structural pattern matching. |
 | Web framework | **FastAPI + Uvicorn** | Native `async` I/O, automatic Pydantic request validation, and auto-generated OpenAPI/Swagger docs at `/docs`. |
 | Queue **and** state store | **Redis** (double duty) | Acts as both the RQ message broker **and** the key/value store for task state. One dependency, minimal container footprint, and the queue + result write can share a connection. |
 | Task manager | **RQ (Redis Queue)** | Low-boilerplate, Redis-native. Ships crash-recovery primitives out of the box: `StartedJobRegistry`, `FailedJobRegistry`, `AbandonedJobError` cleanup, job timeouts, and a `Retry` policy. (Selected over a hand-rolled `BLMOVE` loop for speed of delivery, and over Celery to avoid its heavier footprint.) |
-| Quantum execution | **Qiskit 2.x + qiskit-aer** (`AerSimulator`) | Reference simulator from the assignment. Deserialization via `qiskit.qasm3.loads`. |
+| Quantum execution | **Qiskit 2.x + qiskit-aer** (`AerSimulator`) | Reference simulator for this project. Deserialization via `qiskit.qasm3.loads`. |
 | QASM3 import | **qiskit-qasm3-import ≥ 0.6.0** | `qiskit.qasm3.loads()` is a thin wrapper over `qiskit_qasm3_import.parse`; the package must be installed explicitly. Raises `QASM3ImporterError` on malformed input — our primary validation hook in the worker. |
 | Tests | **pytest + httpx** | Integration tests drive the real HTTP surface exposed by Docker Compose, exercising the full client lifecycle. |
 
@@ -53,7 +52,7 @@ see §11.
 
 - `qiskit.qasm3.loads(program: str) -> QuantumCircuit` — wraps `qiskit_qasm3_import.parse`; requires `qiskit-qasm3-import>=0.6.0`; raises `QASM3ImporterError` on failure. A faster `loads_experimental()` exists with a reduced feature set (not used; we favor full-feature correctness).
 - `qiskit-aer` latest is 0.17.x and requires Qiskit ≥ 1.1.0; import is `from qiskit_aer import AerSimulator`.
-- Execution path matches the assignment snippet: `transpile(qc, simulator)` → `simulator.run(transpiled, shots=NUM_SHOTS)` → `job.result().get_counts()`.
+- Execution path: `transpile(qc, simulator)` → `simulator.run(transpiled, shots=NUM_SHOTS)` → `job.result().get_counts()`.
 
 > **Version pinning policy:** the implementation phase pins exact versions in
 > each service's `requirements.txt` and rebuilds to confirm compatibility. The
@@ -245,10 +244,10 @@ Content-Type: application/json
 | `400 Bad Request` | Missing `qc`, wrong type, empty string, or malformed JSON | `{"status": "error", "message": "<validation detail>"}` |
 | `503 Service Unavailable` | Redis/enqueue unreachable | `{"status": "error", "message": "Task queue unavailable, retry later."}` |
 
-> **Status-code note:** the assignment's example output (`task_id` + message) is
-> returned, but with HTTP `202 Accepted` rather than `200`, which is the
-> semantically correct code for "accepted for async processing." This is called
-> out in the README so the choice is explicit, not accidental.
+> **Status-code note:** the response body (`task_id` + message) is returned with
+> HTTP `202 Accepted` rather than `200`, which is the semantically correct code
+> for "accepted for async processing." This is called out in the README so the
+> choice is explicit, not accidental.
 
 **Validation happens at the API edge.** Malformed payloads are rejected *before*
 anything is enqueued, so bad input never reaches the worker or consumes a queue
@@ -268,7 +267,7 @@ Retrieve the status/result of a task.
 | `404 Not Found` | Unknown ID | `{"status": "error", "message": "Task not found."}` |
 
 The three status strings (`completed` / `pending` / `error`) and the
-`result` shape match the assignment examples exactly.
+`result` shape are the stable public contract clients depend on.
 
 ---
 
@@ -315,8 +314,8 @@ simplicity:
    sweeper) can safely re-submit without creating duplicates.
 2. **Pending sweeper (optional hardening, §11):** a periodic pass finds
    `task:{id}` hashes stuck in `pending` with **no** corresponding `rq:job:{id}`
-   and re-enqueues them. Documented as the production path; not required to meet
-   the assignment's bar.
+   and re-enqueues them. Documented as the production-hardening path; not
+   required for the baseline guarantee above.
 
 ### 7.4 Terminal-state guarantee in the worker
 
@@ -371,7 +370,7 @@ Key orchestration details:
 - **Scalability seam:** `docker compose up --scale worker=N` runs N workers
   against the same queue with no code change.
 - **Single-command runfile:** `docker compose up --build` brings up the whole
-  stack, satisfying the assignment's "straightforward command" check.
+  stack with one straightforward command.
 
 ---
 
@@ -427,7 +426,7 @@ outcomes appear only from statistical noise of finite shots — here, none).
 
 ## Appendix B — Requirements Traceability
 
-| Assignment requirement | Satisfied by |
+| Requirement | Satisfied by |
 |---|---|
 | `POST /tasks` returns task_id + message | §6.1 |
 | `GET /tasks/{id}` returns completed/pending/error/not-found | §6.2 |

@@ -245,7 +245,7 @@ test reaches `completed`; failure tests reach `error`/`404` without hanging.
 
 ## Phase 6 — Root README & documentation finalization
 
-**Objective:** deliver the assignment's README (architecture, setup, contract,
+**Objective:** deliver the root README (architecture, setup, contract,
 resiliency, usage examples).
 
 **Implements:** `README.md` at repo root with:
@@ -269,7 +269,7 @@ circuit via the README's `curl`, and retrieve a result.
 
 ## Phase 7 — End-to-end verification & acceptance
 
-**Objective:** confirm the whole deliverable against the assignment checklist.
+**Objective:** confirm the whole deliverable against the acceptance checklist.
 
 **Runbook:**
 
@@ -293,9 +293,9 @@ checked.
 
 ---
 
-## Definition of Done (assignment checklist mapping)
+## Definition of Done
 
-| Deliverable (assignment §5) | Phase | Done when |
+| Deliverable | Phase | Done when |
 |---|---|---|
 | API server implementation | 2 | `POST`/`GET`/`health` behave per contract |
 | Async task-processing components | 3 | worker drains queue → terminal state |
