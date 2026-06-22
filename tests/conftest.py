@@ -63,6 +63,18 @@ def bell_state_qasm() -> str:
 
 
 @pytest.fixture
+def ghz_state_qasm() -> str:
+    """Valid 3-qubit GHZ circuit (H + two CNOTs, then measure all)."""
+    return _load_fixture("ghz_state.qasm")
+
+
+@pytest.fixture
+def hadamard_pair_qasm() -> str:
+    """Valid 2-qubit circuit: H on both, entangling CNOT, then measure."""
+    return _load_fixture("hadamard_pair.qasm")
+
+
+@pytest.fixture
 def invalid_qasm() -> str:
     """Malformed OpenQASM 3 payload that must fail to parse."""
     return _load_fixture("invalid.qasm")
