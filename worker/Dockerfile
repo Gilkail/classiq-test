@@ -25,11 +25,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Application package (run as `python -m app.worker`; resolves app.jobs.run_task).
 COPY app ./app
+COPY entrypoint.sh /entrypoint.sh
 
 # Drop root for runtime.
-RUN useradd --create-home --uid 1000 appuser \
+RUN chmod +x /entrypoint.sh \
+    && useradd --create-home --uid 1000 appuser \
     && chown -R appuser:appuser /app
 USER appuser
 
-# Blocking RQ worker loop (worker.py __main__ -> main()).
-CMD ["python", "-m", "app.worker"]
+EXPOSE 5679
+
+ENTRYPOINT ["/entrypoint.sh"]

@@ -8,3 +8,4 @@ redis==8.0.0
 rq==2.10.0
 pydantic==2.13.4
 pydantic-settings==2.14.1
+debugpy==1.8.14

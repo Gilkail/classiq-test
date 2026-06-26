@@ -8,8 +8,9 @@ configured queue. Invoked as ``python -m app.worker`` from the worker container;
 from __future__ import annotations
 
 import logging
+import os
 
-from rq import Queue, Worker
+from rq import Queue, SimpleWorker, Worker
 
 from .config import configure_logging, get_settings
 from .redis_client import get_redis
@@ -26,8 +27,9 @@ def main() -> None:
         "worker starting on queue '%s'", settings.rq_queue_name
     )
 
-    # Blocks forever, processing jobs in forked work-horses (crash recovery, §7.2).
-    Worker([queue], connection=connection).work()
+    # SimpleWorker runs jobs in-process so debugpy breakpoints hit (RQ 2.10+).
+    worker_cls = SimpleWorker if os.environ.get("DEBUGPY_ENABLE") == "1" else Worker
+    worker_cls([queue], connection=connection).work()
 
 
 if __name__ == "__main__":

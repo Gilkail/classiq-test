@@ -1,11 +1,15 @@
 # Quantum Circuit Execution Engine — developer shortcuts (Phase 6).
 # Usage: `make up`, `make down`, `make test`, `make logs`.
 
-.PHONY: up down test logs
+.PHONY: up up-debug down test logs
 
 # Build and run the whole stack (redis + api + worker), health-gated.
 up:
 	docker compose up --build
+
+# Same as `up`, but exposes debugpy on api :5678 and worker :5679 for attach debugging.
+up-debug:
+	DEBUGPY_ENABLE=1 docker compose up --build
 
 # Stop the stack. Append ARGS="-v" to also remove the Redis data volume:
 #   make down ARGS="-v"

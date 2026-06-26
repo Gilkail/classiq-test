@@ -19,12 +19,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Application package (uvicorn imports it as `app.main:app`).
 COPY app ./app
+COPY entrypoint.sh /entrypoint.sh
 
 # Drop root for runtime.
-RUN useradd --create-home --uid 1000 appuser \
+RUN chmod +x /entrypoint.sh \
+    && useradd --create-home --uid 1000 appuser \
     && chown -R appuser:appuser /app
 USER appuser
 
-EXPOSE 8000
+EXPOSE 8000 5678
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+ENTRYPOINT ["/entrypoint.sh"]

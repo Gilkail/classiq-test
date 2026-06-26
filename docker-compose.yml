@@ -9,6 +9,8 @@ services:
     image: redis:7-alpine
     # Enable AOF persistence so queued/state data survives a restart.
     command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"  # host access for local API debugging (Postman + debugpy)
     volumes:
       - redis-data:/data
     healthcheck:
@@ -23,6 +25,9 @@ services:
     build: ./api
     ports:
       - "8000:8000"
+      - "5678:5678"  # debugpy (enabled with DEBUGPY_ENABLE=1)
+    environment:
+      DEBUGPY_ENABLE: ${DEBUGPY_ENABLE:-0}
     # Defaults baked into config.py already match REFERENCE §10, so .env is
     # optional — copy .env.example to .env only to override.
     env_file:
@@ -46,6 +51,10 @@ services:
   # ── RQ worker running the Qiskit execution service ────────────────────────
   worker:
     build: ./worker
+    ports:
+      - "5679:5679"  # debugpy (enabled with DEBUGPY_ENABLE=1)
+    environment:
+      DEBUGPY_ENABLE: ${DEBUGPY_ENABLE:-0}
     env_file:
       - path: .env
         required: false
